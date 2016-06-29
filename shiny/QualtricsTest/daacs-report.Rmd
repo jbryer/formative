@@ -1,0 +1,274 @@
+---
+title: "DAACS Feedback Report"
+runtime: shiny
+---
+
+```{r setup, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+source('config.R')
+source('numbers2words.R')
+
+surveyId <- 'SV_42w3IMUxIFzWF0h'
+# responseId <- 'R_2Qt847VHMigyzcv' # For testing
+
+sasr.levels <- c('Strongly Agree', 'Agree', 'Neither', 'Disagree', 'Strongly Disagree')
+mindset.levels <- sasr.levels
+grit.levels <- c('Very much like me','Mostly like me','Somewhat like me',
+				 'Not much like me','Not like me at all')
+
+library(qualtrics)
+library(gdata)
+library(ggplot2)
+library(reshape2)
+
+sasr.feedback <- read.xls('DAACS-Feedback.xlsx', sheet=1, stringsAsFactors=FALSE)
+sasr.mapping <- read.xls('SASR.xlsx', sheet=1, stringsAsFactors=FALSE)
+sasr34 <- sasr.mapping[!is.na(sasr.mapping$SASR34ID),]
+load('SASR-Totals.Rda')
+
+daacs.mapping <- read.xls('DAACS.xlsx', sheet=1, stringsAsFactors=FALSE)
+subscales <- unique(daacs.mapping$Subscale)
+sasr.subscales <- unique(daacs.mapping[daacs.mapping$Source == 'SASR',]$Subscale)
+
+sasr.pos <- 28:61 # Column positions from Qualtrics survey
+grit.pos <- 14:21
+mindset.pos <- 22:27
+#daacs.pos <- 14:61
+daacs.pos <- 22:61
+
+# Student data
+student.daacs <- data.frame()
+if(file.exists('daacs.Rda')) {
+	load('daacs.Rda')
+	student.daacs <- daacs[daacs$ResponseID == responseId,]
+}
+
+# Keep a cache of the SASR Qualtrics results
+if(nrow(student.daacs) == 0) {
+	daacs <- getSurveyResults(user, pass, surveyId, truncNames=50)
+	save(daacs, file='daacs.Rda')
+	student.daacs <- daacs[daacs$ResponseID == responseId,]
+}
+
+# For some reason, Mindset and Grit range from 6 to 10
+student.daacs[1,c(mindset.pos, grit.pos)] <- student.daacs[1,c(mindset.pos, grit.pos)] - 5
+
+# NOTE: Removing Grit scale for now
+daacs.mapping <- daacs.mapping[daacs.mapping$Subscale != 'Grit',]
+
+subscales <- unique(daacs.mapping$Subscale)
+
+# Score the DAACS
+daacs.scored <- data.frame(Factor=subscales, numitems=as.integer(NA), score=as.integer(NA))
+for(i in subscales) {
+	reverse <- daacs.mapping[which(daacs.mapping$Subscale == i),]$Reverse.Score == 'Yes'
+	scores <- student.daacs[1, daacs.pos[which(daacs.mapping$Subscale == i)]]
+	names(scores) <- daacs.mapping[which(daacs.mapping$Subscale == i),]$Item
+	if(length(scores[!reverse]) > 0) {
+		scores[!reverse] <- 6 - scores[!reverse]
+	}
+	daacs.scored[daacs.scored$Factor == i,]$score <- sum(scores, na.rm=TRUE)
+	daacs.scored[daacs.scored$Factor == i,]$numitems <- sum(!is.na(scores))
+}
+
+daacs.scored$percent <- daacs.scored$score / (daacs.scored$numitems * 5)
+
+daacs.scored$percentile <- NA
+for(i in 1:nrow(daacs.scored)) {
+	scale <- as.character(daacs.scored[i,]$Factor)
+	if(paste0(scale, '-Percent') %in% names(sasr.totals)) {
+		daacs.scored[i,]$percentile <- sum(daacs.scored[i,]$percent >= 
+										   sasr.totals[,paste0(scale, '-Percent')]) /
+			nrow(sasr.totals)
+	}
+}
+
+formatPercentile <- function(x) {
+	if(x < 1) { x <- x * 100 }
+	x <- round(x)
+	if(x %% 10 == 1) {
+		return(paste0(x, 'st'))
+	} else if(x %% 10 == 2) {
+		return(paste0(x, 'nd'))
+	} else if(x %% 10 == 3) {
+		return(paste0(x, 'rd'))
+	} else {
+		return(paste0(x, 'th'))
+	}
+}
+
+label_wrap_mod <- function (value, width = 25) {
+    sapply(strwrap(as.character(value), width = width, simplify = FALSE), 
+        paste, collapse = "\n")
+}
+
+```
+
+### Overview
+
+Thank you for completing the Diagnostic Assessment and Achievement of Colleges (DAACS). This report provides information based upon your completion of the DAACS on `r format(as.Date(student.daacs$EndDate), '%B %d, %Y')`.
+
+<center><b>Please note that this a beta version of DAACS and not all feedback and scoring is finalized!</b></center>
+
+This document outlines your results from the self-regulated learning portion of DAACS. These results are provided for informational purposes only and there is no passing or failing. These results may change based upon the course(s) you are taking, environmental factors, or life circumstances. As such, you are encourage to take DAACS at different times and when beginning new courses.
+
+The figure below provides an overview of the `r numbers2words(length(subscales))` domains assessed by DAACS. They are scored on a 0 to 100 scale such that higher scores indicate strenth in that domain. When reviewing your results, you should consider your strenths and how you can take advantage of them when engaging in college work. Any domains with lower scores provide an opportunity of growing as a learner. Some suggestions are provided below.
+
+<center>
+```{r OverviewFigure, echo=FALSE, fig.width=12, fig.height=2, message=FALSE, warning=FALSE}
+daacs.scored$Factor <- factor(daacs.scored$Factor, levels=daacs.scored$Factor)
+ggplot(daacs.scored, aes(fill=percent, ymax=(percent*100), ymin=0, xmax=4, xmin=3)) +
+	geom_rect(color="grey30") + 
+	geom_text(aes(label=paste0(round(percent*100), '')), x=0, y=0) +
+	coord_polar(theta='y') +
+	scale_fill_gradient2() +
+	xlim(c(0,4)) + ylim(c(0,100)) + facet_wrap( ~ Factor, nrow=1) + 
+	theme(legend.position='none', panel.grid=element_blank(), axis.text=element_blank(),
+		  axis.ticks=element_blank(), strip.background=element_blank(),
+		  panel.background=element_rect(size=1, color='grey70', fill=NA))
+
+```
+</center>
+
+
+--------------------------------------------------------------------------------
+
+### Mindset
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=12, fig.height=4}
+
+mindset.results <- student.daacs[,mindset.pos]
+names(mindset.results) <- daacs.mapping[daacs.mapping$Source == 'Mindset',]$Item
+for(i in seq_len(ncol(mindset.results))) {
+	mindset.results[,i] <- factor(mindset.results[,i], levels=1:5, labels=mindset.levels, ordered=TRUE)
+}
+
+mindset.results$ID <- 1
+tmp <- melt(mindset.results, id.vars='ID', stringsAsFactors=FALSE)
+tmp$ID <- NULL
+names(tmp) <- c('Item','Response')
+tmp$xend <- 6
+tmp$Item <- as.character(tmp$Item)
+tmp$Response <- factor(tmp$Response, levels=mindset.levels, ordered=TRUE)
+
+tmp$reverse <- daacs.mapping[daacs.mapping$Source == 'Mindset',]$Reverse.Score == 'Yes'
+if(sum(tmp$reverse) > 0) {
+	tmp[tmp$reverse,]$xend <- 0
+	tmp[tmp$reverse,]$Item <- paste0(tmp[tmp$reverse,]$Item, '\n(reverse scored)')
+}
+tmp$value <- abs(as.integer(tmp$Response) - tmp$xend)
+tmp$hjust <- ifelse(tmp$reverse, -2, 3)
+
+tmp$ItemWrap <- label_wrap_mod(tmp$Item, width=60)
+
+mindset.score <- 5 - daacs.scored[daacs.scored$Factor == 'Mindset',]$score / 6
+mindset.feedback <- ''
+
+if(mindset.score <= 2.5) {
+	mindset.feedback <- 'growth'
+	txt <- sasr.feedback[sasr.feedback$Factor == 'Mindset',]$High
+} else {
+	mindset.feedback <- 'fixed'
+	txt <- sasr.feedback[sasr.feedback$Factor == 'Mindset',]$Low
+}
+
+cat(sasr.feedback[sasr.feedback$Factor == 'Mindset',]$General, '\n\n')
+
+```
+
+**Mindset Video here**
+
+Your total score on the mindset section was `r round(mindset.score, digits=1)` which indicates that you tend to have a  `r mindset.feedback` mindset.
+
+```{r MASS-figure, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=12, fig.height=4}
+ggplot(tmp, aes(x=as.integer(Response), y=Item, color=value)) +
+		geom_segment(aes(xend=xend, yend=Item)) +
+		geom_point(size=5) +
+		geom_text(aes(label=value, hjust=hjust), size=4) +
+		theme(axis.ticks.x=element_blank(), legend.position='none') +
+		ylab('') + xlab('') +
+		scale_x_continuous(limits=c(0,6), breaks=1:5, labels=(gsub(' ', '\n', mindset.levels))) + 
+		scale_color_continuous(limits=c(1,6), low='#FF9900', high='#660066')
+
+cat(txt, '\n\n')
+
+```
+
+
+
+--------------------------------------------------------------------------------
+
+### Self-Efficacy
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+i <- 'Self-Efficacy'
+cat(sasr.feedback[sasr.feedback$Factor == i,]$General, '\n\n')
+```
+
+**Self-Efficacy Video Here**
+
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+source('feedback.R', local=TRUE)
+```
+
+--------------------------------------------------------------------------------
+
+### Motivation
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+
+```
+
+
+**Motivation Video Here**
+
+
+##### Intrinsic Motivation
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+i <- 'Intrinsic Motivation'
+cat(sasr.feedback[sasr.feedback$Factor == i,]$General, '\n\n')
+source('feedback.R', local=TRUE)
+```
+
+##### Extrinsic Motivation
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+i <- 'Extrinsic Motivation'
+cat(sasr.feedback[sasr.feedback$Factor == i,]$General, '\n\n')
+source('feedback.R', local=TRUE)
+```
+
+--------------------------------------------------------------------------------
+
+### Metacognition
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+i <- 'Metacognition'
+cat(sasr.feedback[sasr.feedback$Factor == i,]$General, '\n\n')
+```
+
+**Metacognition Video Here**
+
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+source('feedback.R', local=TRUE)
+```
+
+--------------------------------------------------------------------------------
+
+### Self-Regulation
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+i <- 'Self-Regulation'
+cat(sasr.feedback[sasr.feedback$Factor == i,]$General, '\n\n')
+```
+
+**Strategy Use Video Here**
+
+**Managing Behaviors Video Here**
+
+```{r, eval=TRUE, echo=FALSE, results='asis', message=FALSE, warning=FALSE, fig.width=10, fig.height=2.75}
+source('feedback.R', local=TRUE)
+```
+
