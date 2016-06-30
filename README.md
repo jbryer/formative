@@ -1,11 +1,21 @@
 # Formative Assessments with Shiny
 Jason Bryer, Ph.D.  
 
+[Click here](https://github.com/jbryer/formative/blob/master/slides/2016-06-30%20useR%20Formative%20Assessment.pdf) for the [useR! 2016](http://schedule.user2016.org/event/7BZm/using-shiny-for-formative-assessments) presentation slides.
+
+
+## Using Qualtrics for Collection and Shiny for Feedback
+
+See the useR! 2016 [slides](https://github.com/jbryer/formative/blob/master/slides/2016-06-30%20useR%20Formative%20Assessment.pdf) for details.
+
+[Click here](https://excelsior.eu.qualtrics.com/SE/?SID=SV_42w3IMUxIFzWF0h)  to complete the survey and get your own personalized results. Or you can view a sample report [here](http://daacs.net/shiny/DemoResults/?responseId=R_2Qt847VHMigyzcv).
+
+## Using Shiny for Collection and Feedback
 
 This document describes a framework for using Shiny for conducting, grading, and providing feedback for assessments. This framework supports any multiple choice format including multiple choice tests or Likert type surveys. A demo is available at [jbryer.shinyapps.io/ShinyAssessmentTest](https://jbryer.shinyapps.io/ShinyAssessmentTest/) or can be run locally as a [Github Gist](https://gist.github.com/jbryer/a6fb5a3b1d5fd56cff64):
 
 ```
-runGist('a6fb5a3b1d5fd56cff64')
+shiny::runGitHub('formative','jbryer',subdir='shiny/AssessmentTest')
 ```
 
 Key features of this framework include:
