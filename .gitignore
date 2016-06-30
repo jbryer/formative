@@ -5,3 +5,6 @@
 shiny/QualtricsTest/config.R
 formative.Rproj
 README.html
+shiny/LoginTest/users.rda
+shiny/QualtricsTest/daacs.Rda
+shiny/QualtricsTest/results
